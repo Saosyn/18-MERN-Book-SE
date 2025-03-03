@@ -1,13 +1,13 @@
-import express from 'express';
+import express, { Application } from 'express';
 import path from 'node:path';
 import db from './config/connection.js';
 import routes from './routes/index.js';
 import { ApolloServer } from 'apollo-server-express';
 import typeDefs from './schemas/typeDefs.js';
 import resolvers from './schemas/resolvers.js';
-import { getUserFromToken } from './auth.js';
+import { getUserFromToken } from './services/auth.js';
 
-const app = express();
+const app: Application = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(express.urlencoded({ extended: true }));
@@ -32,7 +32,7 @@ const server = new ApolloServer({
 
 const startApolloServer = async () => {
   await server.start();
-  server.applyMiddleware({ app });
+  server.applyMiddleware({ app: app as any });
 };
 
 db.once('open', () => {
@@ -40,3 +40,5 @@ db.once('open', () => {
     console.log(`🌍 Now listening on localhost:${PORT}${server.graphqlPath}`)
   );
 });
+
+startApolloServer();
