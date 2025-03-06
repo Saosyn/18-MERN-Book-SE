@@ -1,6 +1,6 @@
-import type { Request, Response, NextFunction } from 'express';
+import type { Request } from 'express';
 import jwt from 'jsonwebtoken';
-import 'express';
+import { GraphQLError } from 'graphql';
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -10,98 +10,40 @@ interface JwtPayload {
   email: string;
 }
 
-// Module augmentation for Express Request interface to include user property
-declare global {
-  namespace Express {
-    interface User {
-      _id: unknown;
-      username: string;
-      email: string;
-    }
-  }
-}
+export const authenticateToken = ({ req }: { req: Request }) => {
+  // allows token to be sent via req.body, req.query, or headers
+  let token = req.body.token || req.query.token || req.headers.authorization;
 
-/**
- * Helper function to verify a JWT token.
- * Returns the decoded user payload if valid, or null if invalid.
- */
-export const getUserFromToken = (token?: string): JwtPayload | null => {
-  if (!token) return null;
-  const secretKey = process.env.JWT_SECRET_KEY || '';
-  try {
-    const user = jwt.verify(token, secretKey) as JwtPayload;
-    return user;
-  } catch (error) {
-    console.error('Token verification failed:', error);
-    return null;
+  if (req.headers.authorization) {
+    token = token.split(' ').pop().trim();
   }
-};
-
-/**
- * Express middleware to authenticate a token.
- * For GraphQL, call getUserFromToken in your Apollo Server context function.
- */
-export const authenticateToken = (
-  req: Request,
-  res: Response,
-  next: NextFunction
-): void => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader && authHeader.split(' ')[1];
 
   if (!token) {
-    res.status(401).json({ message: 'Unauthorized: No token provided' });
-    return;
+    return req;
   }
 
-  const user = getUserFromToken(token);
-  if (!user) {
-    res.status(403).json({ message: 'Forbidden: Invalid token' });
-    return;
+  try {
+    const { data }: any = jwt.verify(token, process.env.JWT_SECRET_KEY || '', {
+      maxAge: '2hr',
+    });
+    req.user = data as JwtPayload;
+  } catch (err) {
+    console.log('Invalid token');
   }
 
-  // Attach the verified user to the request
-  req.user = user;
-  next();
+  return req;
 };
 
-/**
- * Signs a new JWT token with the provided user information.
- */
-export const signToken = (
-  username: string,
-  email: string,
-  _id: unknown
-): string => {
+export const signToken = (username: string, email: string, _id: unknown) => {
   const payload = { username, email, _id };
-  const secretKey = process.env.JWT_SECRET_KEY || '';
-  return jwt.sign(payload, secretKey, { expiresIn: '1h' });
+  const secretKey: any = process.env.JWT_SECRET_KEY;
+  console.log('JWT_SECRET_KEY:', secretKey);
+  return jwt.sign({ data: payload }, secretKey, { expiresIn: '2h' });
 };
 
-// export const authenticateToken = (req: Request, res: Response, next: NextFunction) => {
-//   const authHeader = req.headers.authorization;
-
-//   if (authHeader) {
-//     const token = authHeader.split(' ')[1];
-
-//     const secretKey = process.env.JWT_SECRET_KEY || '';
-
-//     jwt.verify(token, secretKey, (err, user) => {
-//       if (err) {
-//         return res.sendStatus(403); // Forbidden
-//       }
-
-//       req.user = user as JwtPayload;
-//       return next();
-//     });
-//   } else {
-//     res.sendStatus(401); // Unauthorized
-//   }
-// };
-
-// export const signToken = (username: string, email: string, _id: unknown) => {
-//   const payload = { username, email, _id };
-//   const secretKey = process.env.JWT_SECRET_KEY || '';
-
-//   return jwt.sign(payload, secretKey, { expiresIn: '1h' });
-// };
+export class AuthenticationError extends GraphQLError {
+  constructor(message: string) {
+    super(message, undefined, undefined, undefined, ['UNAUTHENTICATED']);
+    Object.defineProperty(this, 'name', { value: 'AuthenticationError' });
+  }
+}
