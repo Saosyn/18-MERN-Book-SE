@@ -53,18 +53,27 @@ const resolvers = {
     },
     saveBook: async (
       _parent: any,
-      { book }: { book: any }, // Replace 'any' with a proper type matching your BookInput, if available.
+      { book }: { book: any },
       context: Context
     ) => {
       if (!context.user) {
         throw new AuthenticationError('You need to be logged in!');
       }
-      const updatedUser = await User.findByIdAndUpdate(
-        context.user._id,
-        { $addToSet: { savedBooks: book } },
-        { new: true, runValidators: true }
-      );
-      return updatedUser;
+      console.log('User ID:', context.user._id);
+      console.log('Book input:', book);
+
+      try {
+        const updatedUser = await User.findByIdAndUpdate(
+          context.user._id,
+          { $addToSet: { savedBooks: book } },
+          { new: true, runValidators: true }
+        );
+        console.log('Updated savedBooks:', updatedUser?.savedBooks);
+        return updatedUser;
+      } catch (err) {
+        console.error('Error in saveBook resolver:', err);
+        throw err;
+      }
     },
     removeBook: async (
       _parent: any,

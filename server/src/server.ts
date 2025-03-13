@@ -1,54 +1,48 @@
 import express from 'express';
 import path from 'node:path';
-import type { Application, Request, Response, NextFunction } from 'express';
+import type { Request, Response } from 'express';
 import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@apollo/server/express4';
-// import { authenticateToken } from './services/auth.js';
+import { authenticateToken } from './services/auth.js';
 import { typeDefs, resolvers } from './schemas/index.js';
 import db from './config/connection.js';
-import { getUsersFromToken } from './services/auth.js';
+// Import the seeding function (create this file if you haven't already)
+import seedUsers from './seed/seedUsers.js';
 
 const PORT = process.env.PORT || 3001;
-const app: Application = express();
-
-// Middleware to parse URL-encoded and JSON bodies
-app.use(express.urlencoded({ extended: false }));
-app.use(express.json());
-
 const server = new ApolloServer({
   typeDefs,
   resolvers,
 });
 
+const app = express();
+
 const startApolloServer = async () => {
   await server.start();
+  await db;
 
-  // Mount GraphQL middleware first
+  // Run the seed function (only in development if desired)
+  if (process.env.NODE_ENV !== 'production') {
+    await seedUsers();
+  }
+
+  app.use(express.urlencoded({ extended: false }));
+  app.use(express.json());
+
   app.use(
     '/graphql',
-    json(),
-    expressMiddleware(server, {
-      context: async ({ req }) => {
-        const token = req.headers.authorization?.split(' ')[1];
-        const user = getUserFromToken(token);
-        return { user };
-      },
+    expressMiddleware(server as any, {
+      context: authenticateToken as any,
     })
   );
 
-  // Now, if in production, serve the client’s static files
   if (process.env.NODE_ENV === 'production') {
     app.use(express.static(path.join(__dirname, '../client/dist')));
 
-    // Catch-all route for client-side routing.
-    app.get('*', (req: Request, res: Response, next: NextFunction) => {
-      // Ensure that /graphql requests aren't caught by this route.
-      if (req.path.startsWith('/graphql')) return next();
+    app.get('*', (_req: Request, res: Response) => {
       res.sendFile(path.join(__dirname, '../client/dist/index.html'));
     });
   }
-
-  await db; // Wait for database connection
 
   app.listen(PORT, () => {
     console.log(`API server running on port ${PORT}!`);
@@ -57,6 +51,66 @@ const startApolloServer = async () => {
 };
 
 startApolloServer();
+
+// import express from 'express';
+// import path from 'node:path';
+// import type { Application, Request, Response, NextFunction } from 'express';
+// import { ApolloServer } from '@apollo/server';
+// import { expressMiddleware } from '@apollo/server/express4';
+// // import { authenticateToken } from './services/auth.js';
+// import { typeDefs, resolvers } from './schemas/index.js';
+// import db from './config/connection.js';
+// import { getUsersFromToken } from './services/auth.js';
+
+// const PORT = process.env.PORT || 3001;
+// const app: Application = express();
+
+// // Middleware to parse URL-encoded and JSON bodies
+// app.use(express.urlencoded({ extended: false }));
+// app.use(express.json());
+
+// const server = new ApolloServer({
+//   typeDefs,
+//   resolvers,
+// });
+
+// const startApolloServer = async () => {
+//   await server.start();
+
+//   // Mount GraphQL middleware first
+//   app.use(
+//     '/graphql',
+//     json(),
+//     expressMiddleware(server, {
+//       context: async ({ req }) => {
+//         const token = req.headers.authorization?.split(' ')[1];
+//         const user = getUserFromToken(token);
+//         return { user };
+//       },
+//     })
+//   );
+
+//   // Now, if in production, serve the client’s static files
+//   if (process.env.NODE_ENV === 'production') {
+//     app.use(express.static(path.join(__dirname, '../client/dist')));
+
+//     // Catch-all route for client-side routing.
+//     app.get('*', (req: Request, res: Response, next: NextFunction) => {
+//       // Ensure that /graphql requests aren't caught by this route.
+//       if (req.path.startsWith('/graphql')) return next();
+//       res.sendFile(path.join(__dirname, '../client/dist/index.html'));
+//     });
+//   }
+
+//   await db; // Wait for database connection
+
+//   app.listen(PORT, () => {
+//     console.log(`API server running on port ${PORT}!`);
+//     console.log(`Use GraphQL at http://localhost:${PORT}/graphql`);
+//   });
+// };
+
+// startApolloServer();
 // import routes from './routes/index.js';
 // import resolvers from './schemas/resolvers.js';
 // import { getUserFromToken } from './services/auth.js';
