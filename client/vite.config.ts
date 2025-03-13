@@ -20,4 +20,7 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    outDir: 'dist', // Ensure the client production build outputs to client/dist
+  },
 });
